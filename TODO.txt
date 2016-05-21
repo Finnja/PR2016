@@ -1,0 +1,10 @@
+Having multicast troubles - I think it's because the machines are currently
+on the same address, and we can't have more than one machine bind to port 
+8888 for the multicast on 127.0.0.1:
+- DOWN - Multicast to shut down the network
+- TEST to test if ring is still connected
+- Fix entity IDs (should be at most 8 chars)
+- Duplication
+- Message application
+- File transfer application
+- Make it work with diff addresses
