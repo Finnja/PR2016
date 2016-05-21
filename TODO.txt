@@ -8,3 +8,5 @@ on the same address, and we can't have more than one machine bind to port
 - Message application
 - File transfer application
 - Make it work with diff addresses
+
+This is just for show.
