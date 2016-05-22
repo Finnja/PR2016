@@ -27,6 +27,8 @@ public class Entity implements Runnable {
 
     private ArrayList<String> deja_vus = new ArrayList<String>(); // messages que cette entité a déjà vu
 
+    public static boolean broken;
+
     public Entity(long id, int pe, int pt, String as, int ps, String ad, int pd) {
         this.id = id;
         this.port_ecoute = pe;
@@ -80,6 +82,8 @@ public class Entity implements Runnable {
             NetworkInterface ni = NetworkInterface.getByInetAddress(ip);
 
             dc_diff.setOption(StandardSocketOptions.SO_REUSEADDR, true);
+            // faire marcher le multicast dans la même machine
+            dc_diff.setOption(StandardSocketOptions.IP_MULTICAST_LOOP, true);
             dc_diff.setOption(StandardSocketOptions.IP_MULTICAST_IF, ni);
 
             InetAddress multicast_group = InetAddress.getByName(this.adr_diff);
@@ -168,12 +172,17 @@ public class Entity implements Runnable {
                         String mess_id = mess_mots[1]; // message id
                         //String mess_id = Objects.toString(createID());
 
+                        broken = true;
 
                         // EYBG message revient à l'entité souhaitant sortir de l'anneau
                         if (mess_mots[0].equals("EYBG")) {
                             this.adr_suiv = null;
                             this.port_suiv = -1;
                             System.out.println("Entité exclue de l'anneau.");
+                        }
+                        // TEST message revient à l'entité qui l'a envoyé
+                        else if (mess_mots[0].equals("TEST") && (this.deja_vus).contains(mess_id)) {
+                            broken = false;
                         }
                         // voir si le message a déjà fait le tour de l'anneau
                         else if (!(this.deja_vus).contains(mess_id)) {

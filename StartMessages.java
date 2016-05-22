@@ -18,6 +18,9 @@ public class StartMessages implements Runnable {
     private long id;
     private int port_ecoute;
 
+    // sera changé à faux si un message ne réussit pas à faire le tour de l'anneau
+    public static boolean broken;
+
     private ArrayList<String> deja_vus = new ArrayList<String>(); // messages que cette entité a déjà vu
 
     public StartMessages(Entity e) {
@@ -40,6 +43,7 @@ public class StartMessages implements Runnable {
 
             while (true) {
                 String message = scan.nextLine();
+
                 // message divisé par les espaces
                 String[] mess_mots = message.split(" ");
                 String mess_type = mess_mots[0];
@@ -75,7 +79,7 @@ public class StartMessages implements Runnable {
                     // si le message est un "TEST," il faut fixer un time-out
                     else if(mess_type.equals("TEST")) {
                         Timer timer = new Timer();  
-                        timer.schedule(new Timeout(), 2000); // 2 secondes
+                        timer.schedule(new Timeout(), 8000); // 8 secondes
                     }
 
                     // voir si le message a déjà fait le tour de l'anneau
@@ -113,7 +117,12 @@ public class StartMessages implements Runnable {
 
 class Timeout extends TimerTask {
     public void run() {
-        System.out.println("Time's up!");
-        System.exit(0);
+        if(Entity.broken) {
+            System.out.println("Anneau cassé.");
+            System.exit(0);
+        }
+        else {
+            System.out.println("L'anneau fonctionne toujours.");
+        }
     }
 }
