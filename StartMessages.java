@@ -14,14 +14,16 @@ import java.util.Objects;
 import java.lang.Math;
 
 public class StartMessages implements Runnable {
+    private Entity ent;
     private long id;
     private int port_ecoute;
 
     private ArrayList<String> deja_vus = new ArrayList<String>(); // messages que cette entité a déjà vu
 
-    public StartMessages(long id, int pe) {
-        this.id = id;
-        this.port_ecoute = pe;
+    public StartMessages(Entity e) {
+        this.ent = e;
+        this.id = ent.id;
+        this.port_ecoute = ent.port_ecoute;
     }
 
     /* Méthode pour attendre l'entrée d'un message au stdin par l'utilisateur,
@@ -41,7 +43,6 @@ public class StartMessages implements Runnable {
                 // message divisé par les espaces
                 String[] mess_mots = message.split(" ");
                 String mess_type = mess_mots[0];
-                String mess_content = null;
 
                 // format incorrect du message
                 if (!(Arrays.asList(mess_possibles).contains(mess_type))) {
@@ -53,16 +54,24 @@ public class StartMessages implements Runnable {
                     //String mess_id = mess_mots[1]; // message id
                     String mess_id = Objects.toString(createID());
 
-                    // message is a "APPL"
+                    // message est de type "APPL"
                     if(mess_type.equals("APPL")) {
                         if(mess_mots.length < 2) {
                             System.out.println("Inclurez un message");
                         }
                         else {
-                            mess_content = message.substring(5);
+                            String mess_content = message.substring(5);
+                            message = "APPL " + mess_id + " DIFF#### " + 
+                                    mess_content.length() + " " + mess_content;
                         }
                     }
-                    
+                    // message est de type "GBYE"
+                    else if(mess_type.equals("GBYE") && mess_mots.length == 1) {
+                        String ip = InetAddress.getLocalHost().getHostAddress();
+                        message = "GBYE " + mess_id + " " + ip + " " +
+                                this.port_ecoute + " " + this.ent.adr_suiv + " " +
+                                this.ent.port_suiv;
+                    }
                     // si le message est un "TEST," il faut fixer un time-out
                     else if(mess_type.equals("TEST")) {
                         Timer timer = new Timer();  
@@ -78,9 +87,7 @@ public class StartMessages implements Runnable {
                         InetSocketAddress ia = new 
                                 InetSocketAddress(mon_adr, this.port_ecoute);
                     
-                        String message_send = "APPL " + mess_id + " DIFF#### " + 
-                                mess_content.length() + " " + mess_content;
-                        byte[] udp_data = message_send.getBytes();
+                        byte[] udp_data = message.getBytes();
                         DatagramPacket paquet_send = new DatagramPacket(udp_data, 
                                 udp_data.length, ia);
 
