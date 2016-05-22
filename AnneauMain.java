@@ -69,6 +69,8 @@ public class AnneauMain {
             // créer & commencer les threads
             Thread t = new Thread(ent);
             t.start();
+
+            System.out.println("Première entité fonctionnant");
         }
         catch(Exception e){
             e.printStackTrace();

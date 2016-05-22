@@ -20,6 +20,8 @@ public class StartMessages implements Runnable {
 
     // sera changé à faux si un message ne réussit pas à faire le tour de l'anneau
     public static boolean broken;
+    public static String addr_multicast;
+    public static int port_multicast;
 
     private ArrayList<String> deja_vus = new ArrayList<String>(); // messages que cette entité a déjà vu
 
@@ -27,6 +29,9 @@ public class StartMessages implements Runnable {
         this.ent = e;
         this.id = ent.id;
         this.port_ecoute = ent.port_ecoute;
+
+        this.addr_multicast = ent.adr_diff;
+        this.port_multicast = ent.port_diff;
     }
 
     /* Méthode pour attendre l'entrée d'un message au stdin par l'utilisateur,
@@ -78,6 +83,11 @@ public class StartMessages implements Runnable {
                     }
                     // si le message est un "TEST," il faut fixer un time-out
                     else if(mess_type.equals("TEST")) {
+                        message = "TEST " + mess_id + " " + this.ent.adr_diff +
+                                " " + this.ent.port_diff;
+
+                        addr_multicast = this.ent.adr_diff;
+                        port_multicast = this.ent.port_diff;
                         Timer timer = new Timer();  
                         timer.schedule(new Timeout(), 8000); // 8 secondes
                     }
@@ -113,13 +123,38 @@ public class StartMessages implements Runnable {
 
         return ul_abs;
     }
+
+    public static void shutdown() {
+        String addr_multicast = StartMessages.addr_multicast;
+        int port_multicast = StartMessages.port_multicast;
+
+        try {
+            DatagramSocket md_sock = new DatagramSocket();
+
+            String message = "DOWN";
+            byte[] data = message.getBytes();
+
+            InetSocketAddress ia = new 
+                    InetSocketAddress(addr_multicast, port_multicast);
+            DatagramPacket paquet = new DatagramPacket(data, data.length, ia);
+            
+            System.out.println("En train d'envoyer le multicast to addr " + 
+                    addr_multicast + " on port " + port_multicast + 
+                    " : " + message);
+            md_sock.send(paquet);
+        }
+        catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
 }
 
 class Timeout extends TimerTask {
     public void run() {
         if(Entity.broken) {
+            StartMessages.broken = true;
             System.out.println("Anneau cassé.");
-            System.exit(0);
+            StartMessages.shutdown();
         }
         else {
             System.out.println("L'anneau fonctionne toujours.");

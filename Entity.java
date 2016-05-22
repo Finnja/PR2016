@@ -15,6 +15,10 @@ import java.nio.channels.SelectionKey;
 import java.nio.channels.DatagramChannel;
 import java.nio.ByteBuffer;
 import java.lang.Math;
+import java.lang.*;
+import java.net.ProtocolFamily;
+import java.net.StandardProtocolFamily;
+import java.net.StandardSocketOptions;
 
 public class Entity implements Runnable {
     public long id;
@@ -22,8 +26,8 @@ public class Entity implements Runnable {
     private int port_tcp;
     public String adr_suiv;
     public int port_suiv;
-    private String adr_diff; // adresse de multi-diffusion
-    private int port_diff; // port de multi-diffusion 
+    public String adr_diff; // adresse de multi-diffusion
+    public int port_diff; // port de multi-diffusion 
 
     private ArrayList<String> deja_vus = new ArrayList<String>(); // messages que cette entité a déjà vu
 
@@ -46,13 +50,14 @@ public class Entity implements Runnable {
        qu'il n'a pas encore fait le tour de l'anneau
     */
     public void run() {
+        System.setProperty("java.net.preferIPv4Stack", "true");
         try {
             // commence un thread pour attendre l'entrée au stdin
             StartMessages startmess = new StartMessages(this);
             Thread t_startmess = new Thread(startmess);
             t_startmess.start();
 
-            System.setProperty("java.net.preferIPv4Stack", "true");
+            Selector sel = Selector.open();
 
             // ouvre une socket juste pour envoyer - pas nécessaire de spécifier le port
             DatagramSocket dso = new DatagramSocket();
@@ -60,37 +65,36 @@ public class Entity implements Runnable {
             // ouvre des canaux
             ServerSocketChannel srv = ServerSocketChannel.open();
             DatagramChannel dc_ec = DatagramChannel.open(); // canal pour port d'écoute UDP
-            DatagramChannel dc_diff = DatagramChannel.open(); // canal pour multicast
             srv.configureBlocking(false);
             dc_ec.configureBlocking(false);
-            dc_diff.configureBlocking(false);
 
             // canal TCP pour attendre les demandes d'insertion
             srv.socket().bind(new InetSocketAddress(this.port_tcp));
             // canal UDP pour transmettre les messages dans l'anneau
             dc_ec.bind(new InetSocketAddress(this.port_ecoute));
-            // canal pour écouter des multicasts
-            //dc_diff.bind(new InetSocketAddress(this.port_diff));
 
-            Selector sel = Selector.open();
             srv.register(sel, SelectionKey.OP_ACCEPT);
             dc_ec.register(sel, SelectionKey.OP_READ);
+
+            // configure pour multicast
+            DatagramChannel dc_diff = DatagramChannel.open(); // canal pour multicast
+            dc_diff.configureBlocking(false);
+
+            dc_diff.setOption(StandardSocketOptions.SO_REUSEADDR, true);
+            NetworkInterface ni = NetworkInterface.getByName("en0");
+            dc_diff.setOption(StandardSocketOptions.IP_MULTICAST_IF, ni);
+            // faire marcher le multicast dans la même machine
+            //dc_diff.setOption(StandardSocketOptions.IP_MULTICAST_LOOP, true);
+
+            // canal pour écouter des multicasts
+            dc_diff.bind(new InetSocketAddress(this.port_diff));
             dc_diff.register(sel, SelectionKey.OP_READ);
 
             // joindre le groupe de multicast
-            InetAddress ip = InetAddress.getLocalHost();
-            NetworkInterface ni = NetworkInterface.getByInetAddress(ip);
-
-            dc_diff.setOption(StandardSocketOptions.SO_REUSEADDR, true);
-            // faire marcher le multicast dans la même machine
-            dc_diff.setOption(StandardSocketOptions.IP_MULTICAST_LOOP, true);
-            dc_diff.setOption(StandardSocketOptions.IP_MULTICAST_IF, ni);
-
             InetAddress multicast_group = InetAddress.getByName(this.adr_diff);
             dc_diff.join(multicast_group, ni);
 
             while (true) {
-
                 ByteBuffer buff = ByteBuffer.allocate(1024);
 
                 sel.select();
@@ -143,10 +147,8 @@ public class Entity implements Runnable {
                     }
 
                     // UDP MESSAGE (pour faire le tour de l'anneau)
-                    // ou MULTICAST
                     else if(key.isReadable() && 
-                            (key.channel() == dc_ec || key.channel() == dc_diff)) {
-                            //key.channel() == dc_ec) {
+                            key.channel() == dc_ec) {
                         // recoit le message
                         dc_ec.receive(buff);
                         String message = new String(buff.array(), 0, buff.array().length);
@@ -225,6 +227,21 @@ public class Entity implements Runnable {
                             }
                         }
                     }
+                    // MULTICAST
+                    else if(key.isReadable() && 
+                            key.channel() == dc_diff) {
+                        dc_diff.receive(buff);
+                        String st = new String(buff.array(), 0, buff.array().length);
+                        st = st.trim();
+                        System.out.println("Recu : " + st);
+
+                        // DOWN - anneau doit se terminer
+                        if (st.equals("DOWN")) {
+                            System.out.println("En train de fermer la connexion...");
+                            dso.close();
+                            System.exit(0);
+                        }
+                    }
                     else {
                         System.out.println("Error");
                     }
@@ -273,10 +290,7 @@ public class Entity implements Runnable {
         boolean pred = false;
         try {
             String gbye_adr = gbye_mess[2]; // adresse de l'entité souhaitant sortir
-            //String gbye_adr = InetAddress.getLocalHost().getHostAddress();
-            
             int gbye_port = Integer.parseInt(gbye_mess[3]); // port de l'entité souhaitant sortir
-            //int gbye_port = this.port_ecoute;
 
             if (((this.adr_suiv).equals(gbye_adr) && ((this.port_suiv) == gbye_port))) {
                 pred = true;   
