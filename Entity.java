@@ -21,7 +21,7 @@ import java.net.StandardProtocolFamily;
 import java.net.StandardSocketOptions;
 
 public class Entity implements Runnable {
-    public long id;
+    public String id;
     public int port_ecoute; // port d'écoute
     private int port_tcp;
     public String adr_suiv;
@@ -33,7 +33,7 @@ public class Entity implements Runnable {
 
     public static boolean broken;
 
-    public Entity(long id, int pe, int pt, String as, int ps, String ad, int pd) {
+    public Entity(String id, int pe, int pt, String as, int ps, String ad, int pd) {
         this.id = id;
         this.port_ecoute = pe;
         this.port_tcp = pt;
@@ -154,75 +154,73 @@ public class Entity implements Runnable {
                         String message = new String(buff.array(), 0, buff.array().length);
                         buff.clear();
 
-                        // message divisé par les espaces
-                        String[] mess_mots = message.split(" ");
-
-                        // format incorrect du message
-                        /*
-                        if (mess_mots.length < 2) {
-                            System.out.println(mess_mots.length + " " + mess_mots[0]);
-                            System.out.println("Message mal formé - assurez-vous que le message " +
-                                    "est d'un format précisé dans l'énoncé du projet");
+                        // message est trop long
+                        if (message.trim().length() > 512) {
+                            System.out.println("Le message est trop long. Il ne sera " +
+                                    "pas retransmis.");
                         }
-                        */
                         // message est bon
-                        //else {
-                        InetSocketAddress ia = new 
-                                InetSocketAddress(this.adr_suiv, this.port_suiv);
-                        System.out.println("Recu : " + message);
-                        //String mess_id = (mess_mots[1]).trim(); // message id
-                        String mess_id = mess_mots[1]; // message id
-                        //String mess_id = Objects.toString(createID());
+                        else {
+                            // message divisé par les espaces
+                            String[] mess_mots = message.split(" ");
 
-                        broken = true;
+                            InetSocketAddress ia = new 
+                                    InetSocketAddress(this.adr_suiv, this.port_suiv);
+                            System.out.println("Recu : " + message);
+                            //String mess_id = (mess_mots[1]).trim(); // message id
+                            String mess_id = mess_mots[1]; // message id
+                            //String mess_id = Objects.toString(createID());
 
-                        // EYBG message revient à l'entité souhaitant sortir de l'anneau
-                        if (mess_mots[0].equals("EYBG")) {
-                            this.adr_suiv = null;
-                            this.port_suiv = -1;
-                            System.out.println("Entité exclue de l'anneau.");
-                        }
-                        // TEST message revient à l'entité qui l'a envoyé
-                        else if (mess_mots[0].equals("TEST") && (this.deja_vus).contains(mess_id)) {
-                            broken = false;
-                        }
-                        // voir si le message a déjà fait le tour de l'anneau
-                        else if (!(this.deja_vus).contains(mess_id)) {
-                            (this.deja_vus).add(mess_id);
+                            broken = true;
 
-                            boolean gbye_pred = false; // si l'entité actuelle précède l'entité souhaitant sortir 
-                            if((mess_mots[0]).equals("GBYE")) {
-                                gbye_pred = gbye(this, mess_mots);
+                            // EYBG message revient à l'entité souhaitant sortir de l'anneau
+                            if (mess_mots[0].equals("EYBG")) {
+                                this.adr_suiv = null;
+                                this.port_suiv = -1;
+                                System.out.println("Entité exclue de l'anneau.");
                             }
-                                                
-                            // entité actuelle précède l'entité souhaitant sortir de l'anneau
-                            if(gbye_pred) {
-                                String eybg_mess = "EYBG " + mess_id;
-                                byte[] udp_data = eybg_mess.getBytes();
-                                DatagramPacket paquet_send = new DatagramPacket(udp_data, 
-                                        udp_data.length, ia);
-
-                                System.out.println("En train d'envoyer... " + eybg_mess); 
-                                dso.send(paquet_send);
-
-                                String gbye_adr_suiv = mess_mots[4];
-                                int gbye_port_suiv = Integer.parseInt((mess_mots[5]).trim());
-                                this.adr_suiv = gbye_adr_suiv;
-                                this.port_suiv = gbye_port_suiv;
+                            // TEST message revient à l'entité qui l'a envoyé
+                            else if (mess_mots[0].equals("TEST") && (this.deja_vus).contains(mess_id)) {
+                                broken = false;
                             }
-                            else {
-                                // transmet le message à la prochaine machine
-                                byte[] udp_data = message.getBytes();
-                                DatagramPacket paquet_send = new DatagramPacket(udp_data, 
-                                        udp_data.length, ia);
+                            // voir si le message a déjà fait le tour de l'anneau
+                            else if (!(this.deja_vus).contains(mess_id)) {
+                                (this.deja_vus).add(mess_id);
 
-                                System.out.println("En train d'envoyer... " + message); 
-                                dso.send(paquet_send);
-                                
-                                // WHOS message
-                                if ((mess_mots[0]).equals("WHOS")) {
-                                    String memb_id = whos(this.id, this.port_ecoute, dso, ia);
-                                    this.deja_vus.add(memb_id);
+                                boolean gbye_pred = false; // si l'entité actuelle précède l'entité souhaitant sortir 
+                                if((mess_mots[0]).equals("GBYE")) {
+                                    gbye_pred = gbye(this, mess_mots);
+                                }
+                                                    
+                                // entité actuelle précède l'entité souhaitant sortir de l'anneau
+                                if(gbye_pred) {
+                                    String eybg_mess = "EYBG " + mess_id;
+                                    byte[] udp_data = eybg_mess.getBytes();
+                                    DatagramPacket paquet_send = new DatagramPacket(udp_data, 
+                                            udp_data.length, ia);
+
+                                    System.out.println("En train d'envoyer... " + eybg_mess); 
+                                    dso.send(paquet_send);
+
+                                    String gbye_adr_suiv = mess_mots[4];
+                                    int gbye_port_suiv = Integer.parseInt((mess_mots[5]).trim());
+                                    this.adr_suiv = gbye_adr_suiv;
+                                    this.port_suiv = gbye_port_suiv;
+                                }
+                                else {
+                                    // transmet le message à la prochaine machine
+                                    byte[] udp_data = message.getBytes();
+                                    DatagramPacket paquet_send = new DatagramPacket(udp_data, 
+                                            udp_data.length, ia);
+
+                                    System.out.println("En train d'envoyer... " + message); 
+                                    dso.send(paquet_send);
+                                    
+                                    // WHOS message
+                                    if ((mess_mots[0]).equals("WHOS")) {
+                                        String memb_id = whos(this.id, this.port_ecoute, dso, ia);
+                                        this.deja_vus.add(memb_id);
+                                    }
                                 }
                             }
                         }
@@ -234,6 +232,7 @@ public class Entity implements Runnable {
                         String st = new String(buff.array(), 0, buff.array().length);
                         st = st.trim();
                         System.out.println("Recu : " + st);
+                        buff.clear();
 
                         // DOWN - anneau doit se terminer
                         if (st.equals("DOWN")) {
@@ -256,7 +255,7 @@ public class Entity implements Runnable {
     /* Pour traiter d'un message de la forme :
      * WHOS idm
     */
-    private String whos(long ent_id, int port, 
+    private String whos(String ent_id, int port, 
             DatagramSocket dso, InetSocketAddress ia) {
 
         String mess_id_str = "";

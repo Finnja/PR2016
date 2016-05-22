@@ -38,7 +38,7 @@ public class AnneauMain {
 	public static void main(String[] args) {
         System.setProperty("java.net.preferIPv4Stack" , "true");
 		try {
-            long id = createID();
+            String id = createEntityID();
             String local_adr = InetAddress.getLocalHost().getHostAddress();
 
             // multicast
@@ -77,11 +77,11 @@ public class AnneauMain {
         }
     }
 
-    private static long createID() {
-        UUID u = UUID.randomUUID();
-        long ul = u.getLeastSignificantBits(); // 8 octets
-        long ul_abs = Math.abs(ul); // valeur absolue
+    // crée des IDs uniques d'au plus 8 caractères
+    public static String createEntityID() {
+        String u = UUID.randomUUID().toString();
+        u = u.substring(0, 8); // coupe à 8 caractères
 
-        return ul_abs;
+        return u;
     }
 }

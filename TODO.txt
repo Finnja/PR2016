@@ -1,6 +1,6 @@
-- Fix entity IDs (should be at most 8 chars)
 - Duplication
 - Message application
 - File transfer application
 - Make sure duplication and multicasting work together (multicasts not
   diffused on wrong ring)
+- Simplify InsertEntity.java args?

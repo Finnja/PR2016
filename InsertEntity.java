@@ -61,8 +61,8 @@ public class InsertEntity {
                 String ack = br.readLine();
                 System.out.println("Recu : " + ack);
                 if (ack.equals("ACKC")) {
-                    long id = createID();
-
+                    String id = AnneauMain.createEntityID();
+    
                     // crée nouvelle entité
                     Entity ent = new Entity(id, // id
                             mon_port_udp, // port d'écoute UDP
@@ -86,12 +86,4 @@ public class InsertEntity {
 			e.printStackTrace();
 		}
 	}
-
-    private static long createID() {
-        UUID u = UUID.randomUUID();
-        long ul = u.getLeastSignificantBits(); // 8 octets
-        long ul_abs = Math.abs(ul); // valeur absolue
-
-        return ul_abs;
-    }
 }

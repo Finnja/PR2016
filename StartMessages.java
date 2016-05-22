@@ -15,7 +15,7 @@ import java.lang.Math;
 
 public class StartMessages implements Runnable {
     private Entity ent;
-    private long id;
+    private String id;
     private int port_ecoute;
 
     // sera changé à faux si un message ne réussit pas à faire le tour de l'anneau
@@ -48,64 +48,76 @@ public class StartMessages implements Runnable {
 
             while (true) {
                 String message = scan.nextLine();
-
-                // message divisé par les espaces
-                String[] mess_mots = message.split(" ");
-                String mess_type = mess_mots[0];
-
-                // format incorrect du message
-                if (!(Arrays.asList(mess_possibles).contains(mess_type))) {
-                    System.out.println("Mauvais code de message - assurez-vous que le message " +
-                            "est d'un format précisé dans l'énoncé du projet");
+                
+                // message est trop long
+                if (message.length() > 512) {
+                    System.out.println("Le message est trop long. Il ne sera " +
+                            "pas retransmis.");
                 }
-                // code de message est bon
+                // message est bon
                 else {
-                    //String mess_id = mess_mots[1]; // message id
-                    String mess_id = Objects.toString(createID());
+                    // message divisé par les espaces
+                    String[] mess_mots = message.split(" ");
+                    String mess_type = mess_mots[0];
 
-                    // message est de type "APPL"
-                    if(mess_type.equals("APPL")) {
-                        if(mess_mots.length < 2) {
-                            System.out.println("Inclurez un message");
+                    // format incorrect du message
+                    if (!(Arrays.asList(mess_possibles).contains(mess_type))) {
+                        System.out.println("Mauvais code de message - assurez-vous que le message " +
+                                "est d'un format précisé dans l'énoncé du projet");
+                    }
+                    // code de message est bon
+                    else {
+                        //String mess_id = mess_mots[1]; // message id
+                        String mess_id = Objects.toString(createID());
+
+                        // message est de type "APPL"
+                        if(mess_type.equals("APPL")) {
+                            if(mess_mots.length < 2) {
+                                System.out.println("Inclurez un message");
+                            }
+                            else {
+                                String mess_content = message.substring(5);
+                                message = "APPL " + mess_id + " DIFF#### " + 
+                                        mess_content.length() + " " + mess_content;
+                            }
                         }
-                        else {
-                            String mess_content = message.substring(5);
-                            message = "APPL " + mess_id + " DIFF#### " + 
-                                    mess_content.length() + " " + mess_content;
+                        // message est de type "WHOS"
+                        else if(mess_type.equals("WHOS")) {
+                            message = "WHOS " + mess_id;
                         }
-                    }
-                    // message est de type "GBYE"
-                    else if(mess_type.equals("GBYE") && mess_mots.length == 1) {
-                        String ip = InetAddress.getLocalHost().getHostAddress();
-                        message = "GBYE " + mess_id + " " + ip + " " +
-                                this.port_ecoute + " " + this.ent.adr_suiv + " " +
-                                this.ent.port_suiv;
-                    }
-                    // si le message est un "TEST," il faut fixer un time-out
-                    else if(mess_type.equals("TEST")) {
-                        message = "TEST " + mess_id + " " + this.ent.adr_diff +
-                                " " + this.ent.port_diff;
+                        // message est de type "GBYE"
+                        else if(mess_type.equals("GBYE") && mess_mots.length == 1) {
+                            String ip = InetAddress.getLocalHost().getHostAddress();
+                            message = "GBYE " + mess_id + " " + ip + " " +
+                                    this.port_ecoute + " " + this.ent.adr_suiv + " " +
+                                    this.ent.port_suiv;
+                        }
+                        // si le message est un "TEST," il faut fixer un time-out
+                        else if(mess_type.equals("TEST")) {
+                            message = "TEST " + mess_id + " " + this.ent.adr_diff +
+                                    " " + this.ent.port_diff;
 
-                        addr_multicast = this.ent.adr_diff;
-                        port_multicast = this.ent.port_diff;
-                        Timer timer = new Timer();  
-                        timer.schedule(new Timeout(), 8000); // 8 secondes
-                    }
+                            addr_multicast = this.ent.adr_diff;
+                            port_multicast = this.ent.port_diff;
+                            Timer timer = new Timer();  
+                            timer.schedule(new Timeout(), 8000); // 8 secondes
+                        }
 
-                    // voir si le message a déjà fait le tour de l'anneau
-                    if (!(this.deja_vus).contains(mess_id)) {
-                        (this.deja_vus).add(mess_id);
+                        // voir si le message a déjà fait le tour de l'anneau
+                        if (!(this.deja_vus).contains(mess_id)) {
+                            (this.deja_vus).add(mess_id);
 
-                        String mon_adr = InetAddress.getLocalHost().getHostAddress();
-                        // envoie à son propre port UDP pour commencer le tour de l'anneau
-                        InetSocketAddress ia = new 
-                                InetSocketAddress(mon_adr, this.port_ecoute);
-                    
-                        byte[] udp_data = message.getBytes();
-                        DatagramPacket paquet_send = new DatagramPacket(udp_data, 
-                                udp_data.length, ia);
+                            String mon_adr = InetAddress.getLocalHost().getHostAddress();
+                            // envoie à son propre port UDP pour commencer le tour de l'anneau
+                            InetSocketAddress ia = new 
+                                    InetSocketAddress(mon_adr, this.port_ecoute);
+                        
+                            byte[] udp_data = message.getBytes();
+                            DatagramPacket paquet_send = new DatagramPacket(udp_data, 
+                                    udp_data.length, ia);
 
-                        dso.send(paquet_send);
+                            dso.send(paquet_send);
+                        }
                     }
                 }
             }
