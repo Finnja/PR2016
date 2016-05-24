@@ -48,6 +48,7 @@ public class StartMessages implements Runnable {
 
             while (true) {
                 String message = scan.nextLine();
+                String message2 = new String("");
                 
                 if (message.getBytes().length == 0) {
                     ;
@@ -91,9 +92,17 @@ public class StartMessages implements Runnable {
                         // message est de type "GBYE"
                         else if(mess_type.equals("GBYE") && mess_mots.length == 1) {
                             String ip = InetAddress.getLocalHost().getHostAddress();
+                            
                             message = "GBYE " + mess_id + " " + ip + " " +
                                     this.port_ecoute + " " + this.ent.adr_suiv + " " +
                                     this.ent.port_suiv;
+
+                            if (this.ent.doubleur){
+                                message2 = "GBYE " + mess_id + " " + ip + " " +
+                                    this.port_ecoute + " " + this.ent.adr_suiv2 + " " +
+                                    this.ent.port_suiv2;
+                            }
+
                         }
                         // si le message est un "TEST," il faut fixer un time-out
                         else if(mess_type.equals("TEST")) {
@@ -120,6 +129,14 @@ public class StartMessages implements Runnable {
                                     udp_data.length, ia);
 
                             dso.send(paquet_send);
+
+                            if (this.ent.doubleur){
+                                byte[] udp_data2 = message2.getBytes();
+                                DatagramPacket paquet_send2 = new DatagramPacket(udp_data, 
+                                    udp_data.length, ia);
+                                dso.send(paquet_send2);
+                            }
+
                         }
                     }
                 }

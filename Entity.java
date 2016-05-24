@@ -233,16 +233,51 @@ public class Entity implements Runnable {
                                 if(gbye_pred) {
                                     String eybg_mess = "EYBG " + mess_id;
                                     byte[] udp_data = eybg_mess.getBytes();
-                                    DatagramPacket paquet_send = new DatagramPacket(udp_data, 
-                                            udp_data.length, ia);
-
-                                    System.out.println("En train d'envoyer... " + eybg_mess); 
-                                    dso.send(paquet_send);
 
                                     String gbye_adr_suiv = mess_mots[4];
                                     int gbye_port_suiv = Integer.parseInt((mess_mots[5]).trim());
-                                    this.adr_suiv = gbye_adr_suiv;
-                                    this.port_suiv = gbye_port_suiv;
+
+                                    if (this.doubleur){
+                                        String gbye_adr = mess_mots[2];
+                                        int gbye_port = Integer.parseInt((mess_mots[3]).trim());
+
+                                        if (gbye_adr.equals(this.adr_suiv) && (gbye_port == this.port_suiv))
+                                        {
+                                            DatagramPacket paquet_send = new DatagramPacket(udp_data, 
+                                                udp_data.length, ia);
+
+                                            System.out.println("En train d'envoyer... " + eybg_mess); 
+                                            dso.send(paquet_send);
+
+                                            this.adr_suiv = gbye_adr_suiv;
+                                            this.port_suiv = gbye_port_suiv;
+                                        }
+                                        else {
+                                            InetSocketAddress ia2 = new InetSocketAddress(this.adr_suiv2, 
+                                                this.port_suiv2);
+                                            DatagramPacket paquet_send = new DatagramPacket(udp_data, 
+                                                udp_data.length, ia2);
+
+                                            System.out.println("En train d'envoyer... " + eybg_mess); 
+                                            dso.send(paquet_send);
+
+                                            this.adr_suiv2 = gbye_adr_suiv;
+                                            this.port_suiv2 = gbye_port_suiv;
+
+                                        }
+                                    }
+                                    else {
+                                        DatagramPacket paquet_send = new DatagramPacket(udp_data, 
+                                                udp_data.length, ia);
+
+                                        System.out.println("En train d'envoyer... " + eybg_mess); 
+                                        dso.send(paquet_send);
+
+                                        this.adr_suiv = gbye_adr_suiv;
+                                        this.port_suiv = gbye_port_suiv;
+                                    }
+
+
                                 }
                                 else {
                                     // transmet le message à la prochaine machine
