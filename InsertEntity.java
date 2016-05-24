@@ -14,8 +14,7 @@ public class InsertEntity {
             // vérifie arguments
             if (args.length != 4) {
                 System.out.println("Usage : java InsertEntity <mon_port_udp> <mon_port_tcp> " +
-                        "<adresse_pour_se_connecter> <port_tcp_pour_se_connecter> " + 
-                        "(<adresse_pour_se_connecter> should be 127.0.0.1 for now)"); 
+                        "<adresse_pour_se_connecter> <port_tcp_pour_se_connecter> "); 
             }
             else {
                 // port/adr ce CETTE (nouvelle) entité

@@ -49,10 +49,13 @@ public class StartMessages implements Runnable {
             while (true) {
                 String message = scan.nextLine();
                 
+                if (message.getBytes().length == 0) {
+                    ;
+                }
                 // message est trop long
-                if (message.length() > 512) {
-                    System.out.println("Le message est trop long. Il ne sera " +
-                            "pas retransmis.");
+                else if (message.getBytes().length > 512) {
+                    System.out.println("Le message est trop long (plus que 512 " + 
+                            "octets). Il ne sera pas retransmis.");
                 }
                 // message est bon
                 else {

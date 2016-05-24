@@ -151,13 +151,14 @@ public class Entity implements Runnable {
                             key.channel() == dc_ec) {
                         // recoit le message
                         dc_ec.receive(buff);
+
                         String message = new String(buff.array(), 0, buff.array().length);
                         buff.clear();
 
                         // message est trop long
-                        if (message.trim().length() > 512) {
-                            System.out.println("Le message est trop long. Il ne sera " +
-                                    "pas retransmis.");
+                        if (message.trim().getBytes().length > 512) {
+                            System.out.println("Le message est trop long (plus que 512 " + 
+                                    "octets). Il ne sera pas retransmis.");
                         }
                         // message est bon
                         else {
