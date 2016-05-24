@@ -14,8 +14,7 @@ public class InsertDoubleur {
             // vérifie arguments
             if (args.length != 4) {
                 System.out.println("Usage : java InsertDoubler <mon_port_udp> <mon_port_tcp> " +
-                        "<adresse_pour_se_connecter> <port_tcp_pour_se_connecter> " + 
-                        "(<adresse_pour_se_connecter> should be 127.0.0.1 for now)"); 
+                        "<adresse_pour_se_connecter> <port_tcp_pour_se_connecter> ");
             }
             else {
                 // port/adr ce CETTE (nouvelle) entité
@@ -41,14 +40,18 @@ public class InsertDoubleur {
                 String message = br.readLine();
                 System.out.println("Recu : " + message);
                 String[] mess_welc = message.split(" ");
-                // String adr_suiv = mess_welc[1]; useless ?
-                String adr_diff = mess_welc[3];
-                int port_diff = Integer.parseInt(mess_welc[4]);
+
+                // établir de nouvelles valeurs pour multidiffusion sur le nouvel anneau
+                //String adr_diff = mess_welc[3];
+                String adr_diff_new = "225.1.2.5";
+                //int port_diff = Integer.parseInt(mess_welc[4]);
+                int port_diff_new = 7777;
 
                 // message commence avec "WELC" comme attendu
                 if (mess_welc[0].equals("WELC")) { 
                     // envoie réponse
-                    String mess_dupl = "DUPL " + mon_adr + " " + mon_port_udp + " " + adr_diff + " " + (port_diff + 1) + "\n";
+                    String mess_dupl = "DUPL " + mon_adr + " " + mon_port_udp + " " + adr_diff_new + 
+                            " " + port_diff_new + "\n";
                     System.out.println("Envoie " + mess_dupl);
                     pw.write(mess_dupl);
                     pw.flush();
@@ -66,8 +69,8 @@ public class InsertDoubleur {
                                 port_tcp, // port TCP
                                 adr_conn, // adresse de machine suivante
                                 Integer.parseInt(ackd[1]), // port d'écoute de la machine suivante
-                                adr_diff, // adresse de multi-diffusion
-                                port_diff // port de multi-diffusion
+                                adr_diff_new, // adresse de multi-diffusion
+                                port_diff_new // port de multi-diffusion
                         );            
                         Thread t = new Thread(ent);
                         t.start();
@@ -77,7 +80,6 @@ public class InsertDoubleur {
                 else {
                     System.out.println("Message mal formé");
                 }
-
 
                 br.close();
                 pw.close();

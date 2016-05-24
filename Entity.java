@@ -100,6 +100,8 @@ public class Entity implements Runnable {
             InetAddress multicast_group = InetAddress.getByName(this.adr_diff);
             dc_diff.join(multicast_group, ni);
 
+            DatagramChannel dc_diff2 = null;
+
             while (true) {
                 ByteBuffer buff = ByteBuffer.allocate(1024);
 
@@ -162,8 +164,27 @@ public class Entity implements Runnable {
                                 client.write(ackd_source);
 
                                 this.doubleur = true;
-                                System.out.println("doubleur commencé");
 
+                                dc_diff2 = DatagramChannel.open(); // canal pour multicast
+                                dc_diff2.configureBlocking(false);
+
+                                //NetworkInterface ni2 = NetworkInterface.getByName("en0");
+                                dc_diff2.setOption(StandardSocketOptions.SO_REUSEADDR, true);
+                                dc_diff2.setOption(StandardSocketOptions.IP_MULTICAST_IF, ni);
+                                // faire marcher le multicast dans la même machine
+                                dc_diff2.setOption(StandardSocketOptions.IP_MULTICAST_LOOP, true);
+
+                                // canal pour écouter des multicasts
+                                System.out.println("NEW PORT :  " + this.port_diff2);
+                                System.out.println("NEW ADDR :  " + this.adr_diff2);
+                                dc_diff2.bind(new InetSocketAddress(this.port_diff2));
+                                dc_diff2.register(sel, SelectionKey.OP_READ);
+
+                                // joindre le groupe de multicast
+                                InetAddress multicast_group2 = InetAddress.getByName(this.adr_diff2);
+                                dc_diff.join(multicast_group2, ni);
+
+                                System.out.println("doubleur commencé");
                             }
                             // message est du mauvais format
                             else {
@@ -233,16 +254,49 @@ public class Entity implements Runnable {
                                 if(gbye_pred) {
                                     String eybg_mess = "EYBG " + mess_id;
                                     byte[] udp_data = eybg_mess.getBytes();
-                                    DatagramPacket paquet_send = new DatagramPacket(udp_data, 
-                                            udp_data.length, ia);
-
-                                    System.out.println("En train d'envoyer... " + eybg_mess); 
-                                    dso.send(paquet_send);
 
                                     String gbye_adr_suiv = mess_mots[4];
                                     int gbye_port_suiv = Integer.parseInt((mess_mots[5]).trim());
-                                    this.adr_suiv = gbye_adr_suiv;
-                                    this.port_suiv = gbye_port_suiv;
+
+                                    if (this.doubleur){
+                                        String gbye_adr = mess_mots[2];
+                                        int gbye_port = Integer.parseInt((mess_mots[3]).trim());
+
+                                        if (gbye_adr.equals(this.adr_suiv) && (gbye_port == this.port_suiv))
+                                        {
+                                            DatagramPacket paquet_send = new DatagramPacket(udp_data, 
+                                                udp_data.length, ia);
+
+                                            System.out.println("En train d'envoyer... " + eybg_mess); 
+                                            dso.send(paquet_send);
+
+                                            this.adr_suiv = gbye_adr_suiv;
+                                            this.port_suiv = gbye_port_suiv;
+                                        }
+                                        else {
+                                            InetSocketAddress ia2 = new InetSocketAddress(this.adr_suiv2, 
+                                                this.port_suiv2);
+                                            DatagramPacket paquet_send = new DatagramPacket(udp_data, 
+                                                udp_data.length, ia2);
+
+                                            System.out.println("En train d'envoyer... " + eybg_mess); 
+                                            dso.send(paquet_send);
+
+                                            this.adr_suiv2 = gbye_adr_suiv;
+                                            this.port_suiv2 = gbye_port_suiv;
+
+                                        }
+                                    }
+                                    else {
+                                        DatagramPacket paquet_send = new DatagramPacket(udp_data, 
+                                                udp_data.length, ia);
+
+                                        System.out.println("En train d'envoyer... " + eybg_mess); 
+                                        dso.send(paquet_send);
+
+                                        this.adr_suiv = gbye_adr_suiv;
+                                        this.port_suiv = gbye_port_suiv;
+                                    }
                                 }
                                 else {
                                     // transmet le message à la prochaine machine
@@ -259,7 +313,6 @@ public class Entity implements Runnable {
                                         DatagramPacket paquet_send2 = new DatagramPacket(udp_data, 
                                             udp_data.length, ia2);
                                         dso.send(paquet_send2);
-
                                     }
                                     
                                     // WHOS message
@@ -272,19 +325,34 @@ public class Entity implements Runnable {
                         }
                     }
                     // MULTICAST
-                    else if(key.isReadable() && 
-                            key.channel() == dc_diff) {
-                        dc_diff.receive(buff);
-                        String st = new String(buff.array(), 0, buff.array().length);
-                        st = st.trim();
-                        System.out.println("Recu : " + st);
-                        buff.clear();
+                    else if((key.isReadable() && key.channel() == dc_diff) ||
+                            (key.isReadable() && key.channel() == dc_diff2)) {
 
-                        // DOWN - anneau doit se terminer
-                        if (st.equals("DOWN")) {
-                            System.out.println("En train de fermer la connexion...");
-                            dso.close();
-                            System.exit(0);
+                        // pas un doubleur
+                        if(!this.doubleur) {
+                            if(key.channel() == dc_diff) {
+                                dc_diff.receive(buff);
+                            }
+                            else {
+                                dc_diff2.receive(buff);
+                            }
+                            
+                            String st = new String(buff.array(), 0, buff.array().length);
+                            st = st.trim();
+                            System.out.println("Recu : " + st);
+                            buff.clear();
+
+                            // DOWN - anneau doit se terminer
+                            if (st.equals("DOWN")) {
+                                System.out.println("En train de fermer la connexion...");
+                                dso.close();
+                                System.exit(0);
+                            }
+                        }
+                        // doubleur
+                        else {
+                            this.doubleur = false;
+                            System.out.println("Ceci est un doubleur... restant ouvert.");
                         }
                     }
                     else {
