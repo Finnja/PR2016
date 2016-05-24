@@ -1,8 +1,4 @@
-- Duplication
-- Message application
-- Make sure duplication and multicasting work together (multicasts not
-  diffused on wrong ring)
-- Make sure GBYE works with doubler    
+- File transfer app
+- Integrate Sarah's code into master
 - Simplify InsertEntity.java args?
 - Additional app?
-
