@@ -29,6 +29,12 @@ public class Entity implements Runnable {
     public String adr_diff; // adresse de multi-diffusion
     public int port_diff; // port de multi-diffusion 
 
+    public boolean doubleur = false;
+    public String adr_suiv2;
+    public int port_suiv2;
+    public String adr_diff2; // adresse de multi-diffusion
+    public int port_diff2;
+
     private ArrayList<String> deja_vus = new ArrayList<String>(); // messages que cette entité a déjà vu
 
     public static boolean broken;
@@ -106,6 +112,75 @@ public class Entity implements Runnable {
 
                     // TCP CONNEXION (pour insérer nouvelle entité)
                     if (key.isAcceptable()) {
+                        if (!this.doubleur){
+                            // accepte connexion de la part de la nouvelle entité
+                            SocketChannel client = srv.accept();
+                            client.configureBlocking(false);
+                            // envoie le message WELC
+                            String mess_welc = "WELC " + this.adr_suiv + " " +
+                                    this.port_suiv + " " + this.adr_diff + " " +
+                                    this.port_diff + "\n";
+                            byte[] tcp_data = mess_welc.getBytes();
+                            ByteBuffer source = ByteBuffer.wrap(tcp_data);
+                            client.write(source);
+
+                            // recoit le message NEWC
+                            int bytes_read;
+                            // attend l'envoi du message
+                            while((bytes_read = client.read(buff)) == 0) {
+                                ;
+                            }
+                            String mess_newc = new String(buff.array(), 0, buff.array().length);
+                            String[] mess_newc_mots = mess_newc.trim().split(" "); 
+                            System.out.println("Recu : " + mess_newc);
+                            buff.clear();
+
+                            String adr_new = mess_newc_mots[1]; // adresse de nouvelle entité
+                            int port_ec_new = Integer.parseInt(mess_newc_mots[2]); // port d'écoute de nouvelle entité
+
+                            // message commence avec "NEWC" comme attendu
+                            if (mess_newc_mots[0].equals("NEWC")) {
+                                client.write(ByteBuffer.wrap(("ACKC\n").getBytes()));
+                                client.close();
+
+                                // met nouvelle entité après cette entité
+                                this.adr_suiv = adr_new;
+                                this.port_suiv = port_ec_new;
+                            }
+                            else if (mess_newc_mots[0].equals("DUPL")){
+                                String ip_diff_new = mess_newc_mots[3];
+                                int port_diff_new = Integer.parseInt(mess_newc_mots[4]);
+
+                                this.adr_suiv2 = adr_new;
+                                this.port_suiv2 = port_ec_new;
+                                this.adr_diff2 = ip_diff_new;
+                                this.port_diff2 = port_diff_new;
+
+                                String mess_ackd = "ACKD " + this.port_ecoute + "\n";
+                                byte[] ackd_data = mess_ackd.getBytes();
+                                ByteBuffer ackd_source = ByteBuffer.wrap(ackd_data);
+                                client.write(ackd_source);
+
+                                this.doubleur = true;
+                                System.out.println("doubleur commencé");
+
+                            }
+                            // message est du mauvais format
+                            else {
+                                System.out.println("Message mal formé");
+                            }
+                        }
+                        else {
+                            // envoyer message de rejection
+                            SocketChannel client = srv.accept();
+                            client.configureBlocking(false);
+                            String mess_nier = "NOTC\n";
+
+                            byte[] tcp_data = mess_nier.getBytes();
+                            ByteBuffer source = ByteBuffer.wrap(tcp_data);
+                            client.write(source);
+                        }
+    
                         // accepte connexion de la part de la nouvelle entité
                         SocketChannel client = srv.accept();
                         client.configureBlocking(false);
@@ -216,6 +291,15 @@ public class Entity implements Runnable {
 
                                     System.out.println("En train d'envoyer... " + message); 
                                     dso.send(paquet_send);
+
+                                    if (this.doubleur){
+                                        InetSocketAddress ia2 = new InetSocketAddress(this.adr_suiv2, 
+                                            this.port_suiv2);
+                                        DatagramPacket paquet_send2 = new DatagramPacket(udp_data, 
+                                            udp_data.length, ia2);
+                                        dso.send(paquet_send2);
+
+                                    }
                                     
                                     // WHOS message
                                     if ((mess_mots[0]).equals("WHOS")) {
