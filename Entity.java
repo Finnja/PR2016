@@ -180,45 +180,6 @@ public class Entity implements Runnable {
                             ByteBuffer source = ByteBuffer.wrap(tcp_data);
                             client.write(source);
                         }
-    
-                        // accepte connexion de la part de la nouvelle entité
-                        SocketChannel client = srv.accept();
-                        client.configureBlocking(false);
-                        // envoie le message WELC
-                        String mess_welc = "WELC " + this.adr_suiv + " " +
-                                this.port_suiv + " " + this.adr_diff + " " +
-                                this.port_diff + "\n";
-                        byte[] tcp_data = mess_welc.getBytes();
-                        ByteBuffer source = ByteBuffer.wrap(tcp_data);
-                        client.write(source);
-
-                        // recoit le message NEWC
-                        int bytes_read;
-                        // attend l'envoi du message
-                        while((bytes_read = client.read(buff)) == 0) {
-                            ;
-                        }
-                        String mess_newc = new String(buff.array(), 0, buff.array().length);
-                        String[] mess_newc_mots = mess_newc.trim().split(" "); 
-                        System.out.println("Recu : " + mess_newc);
-                        buff.clear();
-
-                        String adr_new = mess_newc_mots[1]; // adresse de nouvelle entité
-                        int port_ec_new = Integer.parseInt(mess_newc_mots[2]); // port d'écoute de nouvelle entité
-
-                        // message commence avec "NEWC" comme attendu
-                        if (mess_newc_mots[0].equals("NEWC")) {
-                            client.write(ByteBuffer.wrap(("ACKC\n").getBytes()));
-                            client.close();
-
-                            // met nouvelle entité après cette entité
-                            this.adr_suiv = adr_new;
-                            this.port_suiv = port_ec_new;
-                        }
-                        // message est du mauvais format
-                        else {
-                            System.out.println("Message mal formé");
-                        }
                     }
 
                     // UDP MESSAGE (pour faire le tour de l'anneau)

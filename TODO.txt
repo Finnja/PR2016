@@ -2,5 +2,7 @@
 - Message application
 - Make sure duplication and multicasting work together (multicasts not
   diffused on wrong ring)
+- Make sure GBYE works with doubler    
 - Simplify InsertEntity.java args?
 - Additional app?
+
