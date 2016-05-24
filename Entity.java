@@ -102,6 +102,9 @@ public class Entity implements Runnable {
 
             DatagramChannel dc_diff2 = null;
 
+            // hack to fix multicasting thing
+            boolean first = true;
+
             while (true) {
                 ByteBuffer buff = ByteBuffer.allocate(1024);
 
@@ -168,21 +171,19 @@ public class Entity implements Runnable {
                                 dc_diff2 = DatagramChannel.open(); // canal pour multicast
                                 dc_diff2.configureBlocking(false);
 
-                                //NetworkInterface ni2 = NetworkInterface.getByName("en0");
+                                NetworkInterface ni2 = NetworkInterface.getByName("en0");
                                 dc_diff2.setOption(StandardSocketOptions.SO_REUSEADDR, true);
-                                dc_diff2.setOption(StandardSocketOptions.IP_MULTICAST_IF, ni);
+                                dc_diff2.setOption(StandardSocketOptions.IP_MULTICAST_IF, ni2);
                                 // faire marcher le multicast dans la même machine
                                 dc_diff2.setOption(StandardSocketOptions.IP_MULTICAST_LOOP, true);
 
                                 // canal pour écouter des multicasts
-                                System.out.println("NEW PORT :  " + this.port_diff2);
-                                System.out.println("NEW ADDR :  " + this.adr_diff2);
                                 dc_diff2.bind(new InetSocketAddress(this.port_diff2));
                                 dc_diff2.register(sel, SelectionKey.OP_READ);
 
                                 // joindre le groupe de multicast
                                 InetAddress multicast_group2 = InetAddress.getByName(this.adr_diff2);
-                                dc_diff.join(multicast_group2, ni);
+                                dc_diff2.join(multicast_group2, ni2);
 
                                 System.out.println("doubleur commencé");
                             }
@@ -328,31 +329,30 @@ public class Entity implements Runnable {
                     else if((key.isReadable() && key.channel() == dc_diff) ||
                             (key.isReadable() && key.channel() == dc_diff2)) {
 
-                        // pas un doubleur
-                        if(!this.doubleur) {
-                            if(key.channel() == dc_diff) {
-                                dc_diff.receive(buff);
-                            }
-                            else {
-                                dc_diff2.receive(buff);
-                            }
-                            
-                            String st = new String(buff.array(), 0, buff.array().length);
-                            st = st.trim();
-                            System.out.println("Recu : " + st);
-                            buff.clear();
+                        if(key.channel() == dc_diff) {
+                            dc_diff.receive(buff);
+                        }
+                        else {
+                            dc_diff2.receive(buff);
+                        }
+                        
+                        String st = new String(buff.array(), 0, buff.array().length);
+                        st = st.trim();
+                        System.out.println("Recu : " + st);
+                        buff.clear();
 
-                            // DOWN - anneau doit se terminer
-                            if (st.equals("DOWN")) {
+                        // DOWN - anneau doit se terminer
+                        if (st.equals("DOWN")) {
+                            // pas un doubleur
+                            if(!this.doubleur) {
                                 System.out.println("En train de fermer la connexion...");
                                 dso.close();
                                 System.exit(0);
                             }
-                        }
-                        // doubleur
-                        else {
-                            this.doubleur = false;
-                            System.out.println("Ceci est un doubleur... restant ouvert.");
+                            else {
+                                System.out.println("Ceci est un doubleur... restant ouvert.");
+                                this.doubleur = false;
+                            }
                         }
                     }
                     else {
