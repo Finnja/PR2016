@@ -237,6 +237,7 @@ public class Entity implements Runnable {
                                 this.adr_suiv = null;
                                 this.port_suiv = -1;
                                 System.out.println("Entité exclue de l'anneau.");
+                                System.exit(0);
                             }
                             // TEST message revient à l'entité qui l'a envoyé
                             else if (mess_mots[0].equals("TEST") && (this.deja_vus).contains(mess_id)) {
@@ -299,8 +300,131 @@ public class Entity implements Runnable {
                                         this.port_suiv = gbye_port_suiv;
                                     }
                                 }
+            
+                                // APPL TRANS CODE
+                                //IF RECEIVES MESSAGE APPL TRANS### REQ THEN LOOK FOR FILE
+                                else if((mess_mots[0]).equals("APPL") && (mess_mots[2]).equals("TRANS###") && (mess_mots[3]).equals("REQ")){
+                                    String fName = mess_mots[5].trim();
+                                    String messId = mess_mots[1].trim();
+                                    String currentDir = System.getProperty("user.dir");
+                                    String path = currentDir.trim() + "/" + fName.trim();
+                                    System.out.println("CURRENT FILE PATH : " + path);
+                                    //if finds file 
+                                    if (findFile(fName, currentDir)){
+                                        //send message right before transmission
+                                        File file = new File(path);
+                                        int len = (int) file.length();
+                                        
+                                        //finding the possible size
+                                        int no_mess = 0;
+                                        String mess_poss;
+                                        String trans_id = Objects.toString(createID());
+                                        
+                                        mess_poss = "APPL " + messId + " TRANS### SEN " + trans_id + " " + no_mess + "  ";
+                                        byte[] mess_size = mess_poss.getBytes();
+                                        int poss_size = 512 - mess_size.length;
+                                        //creeant la variable nummess
+                                        double d = len/poss_size;
+                                        if (d<1){
+                                            d = 1.0;
+                                        }else {
+                                            d = Math.ceil(d);
+                                        }
+                                        int nummess = (int)d;
+                                                                            
+                                        //envoye le message decrivant combien de messages il va envoyer
+                                        message = "APPL " + messId + " TRANS### ROK " + trans_id + " " +
+                                                fName.length() + " " + fName + " " + nummess;   
+                                        byte[] udp_data = message.getBytes();
+                                        DatagramPacket paquet_send = new DatagramPacket(udp_data, 
+                                                udp_data.length, ia);
+                                        System.out.println("En train d'envoyer... " + message); 
+                                        dso.send(paquet_send); 
+                                        //System.out.println("ROK PACKET LENGTH : "+ udp_data.length);
+                                        
+                                        //continue à envoyer les autres messages
+                                        byte[] mess = new byte[len];
+                                        FileInputStream in = new FileInputStream(file);
+                                        int n = 0;
+                                        int bytes_read = 0;
+                                        int left = len;
+                                        while((bytes_read < len) && (n != -1)){        
+                                            
+                                            String messIdSen = Objects.toString(createID());
+                                            if (left >= poss_size){
+                                                n = in.read(mess, bytes_read, poss_size);
+                                                //System.out.println("mess = " + mess);
+                                                bytes_read += n;
+                                                left = left - poss_size;
+                                                String m = new String(mess);
+                                                
+                                                //sending message
+                                                message = "APPL " + messIdSen + " TRANS### SEN " + trans_id + " " + no_mess + " " +
+                                                        m.length() + " " + m;   
+                                                udp_data = message.getBytes();
+                                                paquet_send = new DatagramPacket(udp_data, 
+                                                        udp_data.length, ia);
+                                                System.out.println("En train d'envoyer... " + message); 
+                                                //System.out.println("greater");
+                                                dso.send(paquet_send);
+                                            } else if (left < poss_size) {
+                                                n = in.read(mess, bytes_read, left);
+                                                bytes_read += n;
+                                                left = 0;
+                                                //System.out.println("MESSAGE" );
+                                                String m = new String(mess);
+                                                //System.out.println(m);
+                                                //sending message
+                                                message = "APPL " + messIdSen + " TRANS### SEN " + trans_id + " " + no_mess + " " +
+                                                        m.length() + " " + m;   
+                                                udp_data = message.getBytes();
+                                                paquet_send = new DatagramPacket(udp_data, 
+                                                        udp_data.length, ia);
+                                                System.out.println("En train d'envoyer... " + message); 
+                                                //System.out.println("smaller");
+                                                dso.send(paquet_send);
+                                            }
+                                            no_mess += 1;
+                                        }                                    
+                                    }
+                                }
+
+                                //IF FILE == ROK
+                                if((mess_mots[0]).equals("APPL") && (mess_mots[2]).equals("TRANS###") && (mess_mots[3]).equals("ROK")){
+                                    System.out.println("RECIEVED A MESSAGE WITH ROK FIRST");
+                                    String fName = mess_mots[6].trim();
+                                    int nummess = Integer.parseInt(mess_mots[7].trim());
+                                    String trans_id = mess_mots[4].trim();
+                                    String currentDir = System.getProperty("user.dir");
+                                    String path = currentDir.trim() + "/" + fName.trim();
+                                    System.out.println("CURRENT FILE PATH ROK : " + path);
+                                    File file = new File(path);
+                                    // if file doesnt exists, then create it
+                                    if (!file.exists()) {
+                                        file.createNewFile();
+                                    }
+                                    FileOutputStream outputStream = new FileOutputStream(fName);
+                                    for (int i=0; i<nummess; i++){
+                                        // recoit le message
+                                        dc_ec.receive(buff);
+                                        System.out.println("HERE IS THE BUFFER " );
+                                        String messageSEN = new String(buff.array(), 0, buff.array().length);
+                                        buff.clear();
+                                        
+                                        //InetSocketAddress ia = new InetSocketAddress(this.adr_suiv, this.port_suiv);
+                                        System.out.println("Recu SEN: " + messageSEN);
+                                        
+                                        String[] mess_mots1 = messageSEN.split(" ");
+                                        String encCont = mess_mots1[7];
+                                        byte[] encBuf = encCont.getBytes();               
+                                        outputStream.write(encBuf); 
+                                    }
+                                    outputStream.close();
+                                }
+
+
+                                // transmet le message à la prochaine machine
                                 else {
-                                    // transmet le message à la prochaine machine
                                     byte[] udp_data = message.getBytes();
                                     DatagramPacket paquet_send = new DatagramPacket(udp_data, 
                                             udp_data.length, ia);
@@ -323,8 +447,45 @@ public class Entity implements Runnable {
                                     }
                                 }
                             }
+
+
+                            // APPL TRANS CODE
+                            //IF FILE == ROK
+                            if((mess_mots[0]).equals("APPL") && (mess_mots[2]).equals("TRANS###") && (mess_mots[3]).equals("ROK")){
+                                System.out.println("RECIEVED A MESSAGE WITH ROK SECOND");
+                                String fName = mess_mots[6].trim();
+                                int nummess = Integer.parseInt(mess_mots[7].trim());
+                                String trans_id = mess_mots[4].trim();
+                                String currentDir = System.getProperty("user.dir");
+                                String path = currentDir.trim() + "/" + fName.trim();
+                                System.out.println("CURRENT FILE PATH ROK : " + path);
+                                File file = new File(path);
+                                // if file doesnt exists, then create it
+                                if (!file.exists()) {
+                                    file.createNewFile();
+                                }
+                                FileOutputStream outputStream = new FileOutputStream(fName);
+                                for (int i=0; i<nummess; i++){
+                                    // recoit le message
+                                    dc_ec.receive(buff);
+                                    String messageSEN = new String(buff.array(), 0, buff.array().length);
+                                    buff.clear();
+                                    
+                                    //InetSocketAddress ia = new InetSocketAddress(this.adr_suiv, this.port_suiv);
+                                    System.out.println("Recu SEN: " + messageSEN);
+                                    
+                                    String[] mess_mots1 = messageSEN.split(" ");
+                                    String encCont = mess_mots1[7];
+                                    byte[] encBuf = encCont.getBytes();               
+                                    outputStream.write(encBuf); 
+                                }
+                                outputStream.close();
+                            }
                         }
                     }
+
+
+
                     // MULTICAST
                     else if((key.isReadable() && key.channel() == dc_diff) ||
                             (key.isReadable() && key.channel() == dc_diff2)) {
@@ -413,6 +574,34 @@ public class Entity implements Runnable {
             e.printStackTrace();
         }
         return pred; 
+    }
+
+    /* Pour chercher le fichier dans le dossier donné
+    */
+    private boolean findFile(String file, String path){
+        //System.out.println("trying to find file: ");
+        //System.out.print(file);
+        //System.out.println("trying to find path: ");
+        //System.out.print(path);
+        File folder = new File(path);
+        boolean found = false;
+        if (folder.isDirectory()){
+            File[] listOfFiles = folder.listFiles();
+            if(listOfFiles.length < 1){
+                //pas de fichers dans le dossier
+            } else {
+                String nameF = "";
+                for (File f : listOfFiles){
+                    nameF = f.getName().trim();
+                    if (nameF.equals(file.trim())){
+                        found = true;
+                        System.out.println("FOUND IT!!!");
+                    }
+                }
+            }
+            return found;
+        } 
+        return found;
     }
 
     // crée des IDs uniques de 8 octets

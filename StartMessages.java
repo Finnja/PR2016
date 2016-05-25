@@ -71,20 +71,33 @@ public class StartMessages implements Runnable {
                     }
                     // code de message est bon
                     else {
-                        //String mess_id = mess_mots[1]; // message id
                         String mess_id = Objects.toString(createID());
 
-                        // message est de type "APPL"
-                        if(mess_type.equals("APPL")) {
-                            if(mess_mots.length < 2) {
+                        // message est de type "APPL DIFF" 
+                        if(mess_type.equals("APPL") && (mess_mots[1]).equals("DIFF") ) {
+                            if(mess_mots.length < 3) {
                                 System.out.println("Inclurez un message");
                             }
                             else {
-                                String mess_content = message.substring(5);
+                                String mess_content = message.substring(10);
                                 message = "APPL " + mess_id + " DIFF#### " + 
                                         mess_content.length() + " " + mess_content;
                             }
                         }
+
+                        // message est de type "APPL TRANS"
+                        else if(mess_type.equals("APPL") && (mess_mots[1]).equals("TRANS") ) {
+                            if(mess_mots.length < 3) {
+                                System.out.println("Inclurez un nom du fichier");
+                            }
+                            else {
+                                String mess_filename = mess_mots[2];
+                                String mess_content = mess_filename;
+                                message = "APPL " + mess_id + " TRANS### REQ " + 
+                                        mess_content.length() + " " + mess_content;
+                            }
+                        }
+
                         // message est de type "WHOS"
                         else if(mess_type.equals("WHOS")) {
                             message = "WHOS " + mess_id;
