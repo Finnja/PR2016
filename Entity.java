@@ -5,7 +5,6 @@
 import java.net.*;
 import java.io.*;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Iterator;
 import java.util.UUID;
 import java.util.Objects;
@@ -29,6 +28,12 @@ public class Entity implements Runnable {
     public int port_suiv;
     public String adr_diff; // adresse de multi-diffusion
     public int port_diff; // port de multi-diffusion 
+
+    public boolean doubleur = false;
+    public String adr_suiv2;
+    public int port_suiv2;
+    public String adr_diff2; // adresse de multi-diffusion
+    public int port_diff2;
 
     private ArrayList<String> deja_vus = new ArrayList<String>(); // messages que cette entité a déjà vu
 
@@ -82,7 +87,7 @@ public class Entity implements Runnable {
             dc_diff.configureBlocking(false);
 
             dc_diff.setOption(StandardSocketOptions.SO_REUSEADDR, true);
-            NetworkInterface ni = NetworkInterface.getByName("en1");
+            NetworkInterface ni = NetworkInterface.getByName("en0");
             dc_diff.setOption(StandardSocketOptions.IP_MULTICAST_IF, ni);
             // faire marcher le multicast dans la même machine
             //dc_diff.setOption(StandardSocketOptions.IP_MULTICAST_LOOP, true);
@@ -94,6 +99,11 @@ public class Entity implements Runnable {
             // joindre le groupe de multicast
             InetAddress multicast_group = InetAddress.getByName(this.adr_diff);
             dc_diff.join(multicast_group, ni);
+
+            DatagramChannel dc_diff2 = null;
+
+            // hack to fix multicasting thing
+            boolean first = true;
 
             while (true) {
                 ByteBuffer buff = ByteBuffer.allocate(1024);
@@ -107,43 +117,90 @@ public class Entity implements Runnable {
 
                     // TCP CONNEXION (pour insérer nouvelle entité)
                     if (key.isAcceptable()) {
-                        // accepte connexion de la part de la nouvelle entité
-                        SocketChannel client = srv.accept();
-                        client.configureBlocking(false);
-                        // envoie le message WELC
-                        String mess_welc = "WELC " + this.adr_suiv + " " +
-                                this.port_suiv + " " + this.adr_diff + " " +
-                                this.port_diff + "\n";
-                        byte[] tcp_data = mess_welc.getBytes();
-                        ByteBuffer source = ByteBuffer.wrap(tcp_data);
-                        client.write(source);
+                        if (!this.doubleur){
+                            // accepte connexion de la part de la nouvelle entité
+                            SocketChannel client = srv.accept();
+                            client.configureBlocking(false);
+                            // envoie le message WELC
+                            String mess_welc = "WELC " + this.adr_suiv + " " +
+                                    this.port_suiv + " " + this.adr_diff + " " +
+                                    this.port_diff + "\n";
+                            byte[] tcp_data = mess_welc.getBytes();
+                            ByteBuffer source = ByteBuffer.wrap(tcp_data);
+                            client.write(source);
 
-                        // recoit le message NEWC
-                        int bytes_read;
-                        // attend l'envoi du message
-                        while((bytes_read = client.read(buff)) == 0) {
-                            ;
+                            // recoit le message NEWC
+                            int bytes_read;
+                            // attend l'envoi du message
+                            while((bytes_read = client.read(buff)) == 0) {
+                                ;
+                            }
+                            String mess_newc = new String(buff.array(), 0, buff.array().length);
+                            String[] mess_newc_mots = mess_newc.trim().split(" "); 
+                            System.out.println("Recu : " + mess_newc);
+                            buff.clear();
+
+                            String adr_new = mess_newc_mots[1]; // adresse de nouvelle entité
+                            int port_ec_new = Integer.parseInt(mess_newc_mots[2]); // port d'écoute de nouvelle entité
+
+                            // message commence avec "NEWC" comme attendu
+                            if (mess_newc_mots[0].equals("NEWC")) {
+                                client.write(ByteBuffer.wrap(("ACKC\n").getBytes()));
+                                client.close();
+
+                                // met nouvelle entité après cette entité
+                                this.adr_suiv = adr_new;
+                                this.port_suiv = port_ec_new;
+                            }
+                            else if (mess_newc_mots[0].equals("DUPL")){
+                                String ip_diff_new = mess_newc_mots[3];
+                                int port_diff_new = Integer.parseInt(mess_newc_mots[4]);
+
+                                this.adr_suiv2 = adr_new;
+                                this.port_suiv2 = port_ec_new;
+                                this.adr_diff2 = ip_diff_new;
+                                this.port_diff2 = port_diff_new;
+
+                                String mess_ackd = "ACKD " + this.port_ecoute + "\n";
+                                byte[] ackd_data = mess_ackd.getBytes();
+                                ByteBuffer ackd_source = ByteBuffer.wrap(ackd_data);
+                                client.write(ackd_source);
+
+                                this.doubleur = true;
+
+                                dc_diff2 = DatagramChannel.open(); // canal pour multicast
+                                dc_diff2.configureBlocking(false);
+
+                                NetworkInterface ni2 = NetworkInterface.getByName("en0");
+                                dc_diff2.setOption(StandardSocketOptions.SO_REUSEADDR, true);
+                                dc_diff2.setOption(StandardSocketOptions.IP_MULTICAST_IF, ni2);
+                                // faire marcher le multicast dans la même machine
+                                dc_diff2.setOption(StandardSocketOptions.IP_MULTICAST_LOOP, true);
+
+                                // canal pour écouter des multicasts
+                                dc_diff2.bind(new InetSocketAddress(this.port_diff2));
+                                dc_diff2.register(sel, SelectionKey.OP_READ);
+
+                                // joindre le groupe de multicast
+                                InetAddress multicast_group2 = InetAddress.getByName(this.adr_diff2);
+                                dc_diff2.join(multicast_group2, ni2);
+
+                                System.out.println("doubleur commencé");
+                            }
+                            // message est du mauvais format
+                            else {
+                                System.out.println("Message mal formé");
+                            }
                         }
-                        String mess_newc = new String(buff.array(), 0, buff.array().length);
-                        String[] mess_newc_mots = mess_newc.trim().split(" "); 
-                        System.out.println("Recu : " + mess_newc);
-                        buff.clear();
-
-                        String adr_new = mess_newc_mots[1]; // adresse de nouvelle entité
-                        int port_ec_new = Integer.parseInt(mess_newc_mots[2]); // port d'écoute de nouvelle entité
-
-                        // message commence avec "NEWC" comme attendu
-                        if (mess_newc_mots[0].equals("NEWC")) {
-                            client.write(ByteBuffer.wrap(("ACKC\n").getBytes()));
-                            client.close();
-
-                            // met nouvelle entité après cette entité
-                            this.adr_suiv = adr_new;
-                            this.port_suiv = port_ec_new;
-                        }
-                        // message est du mauvais format
                         else {
-                            System.out.println("Message mal formé");
+                            // envoyer message de rejection
+                            SocketChannel client = srv.accept();
+                            client.configureBlocking(false);
+                            String mess_nier = "NOTC\n";
+
+                            byte[] tcp_data = mess_nier.getBytes();
+                            ByteBuffer source = ByteBuffer.wrap(tcp_data);
+                            client.write(source);
                         }
                     }
 
@@ -152,14 +209,14 @@ public class Entity implements Runnable {
                             key.channel() == dc_ec) {
                         // recoit le message
                         dc_ec.receive(buff);
+
                         String message = new String(buff.array(), 0, buff.array().length);
                         buff.clear();
-                        
-                        System.out.println("MESSAGE RECIEVED: "+ message);
+
                         // message est trop long
-                        if (message.trim().length() > 512) {
-                            System.out.println("Le message est trop long. Il ne sera " +
-                                    "pas retransmis.");
+                        if (message.trim().getBytes().length > 512) {
+                            System.out.println("Le message est trop long (plus que 512 " + 
+                                    "octets). Il ne sera pas retransmis.");
                         }
                         // message est bon
                         else {
@@ -168,10 +225,9 @@ public class Entity implements Runnable {
 
                             InetSocketAddress ia = new 
                                     InetSocketAddress(this.adr_suiv, this.port_suiv);
-                            System.out.println("Recu THIS IS PRINTING : " + message);
+                            System.out.println("Recu : " + message);
                             //String mess_id = (mess_mots[1]).trim(); // message id
                             String mess_id = mess_mots[1]; // message id
-                                                  
                             //String mess_id = Objects.toString(createID());
 
                             broken = true;
@@ -181,13 +237,12 @@ public class Entity implements Runnable {
                                 this.adr_suiv = null;
                                 this.port_suiv = -1;
                                 System.out.println("Entité exclue de l'anneau.");
+                                System.exit(0);
                             }
                             // TEST message revient à l'entité qui l'a envoyé
                             else if (mess_mots[0].equals("TEST") && (this.deja_vus).contains(mess_id)) {
                                 broken = false;
                             }
-                            
-                            
                             // voir si le message a déjà fait le tour de l'anneau
                             else if (!(this.deja_vus).contains(mess_id)) {
                                 (this.deja_vus).add(mess_id);
@@ -201,53 +256,86 @@ public class Entity implements Runnable {
                                 if(gbye_pred) {
                                     String eybg_mess = "EYBG " + mess_id;
                                     byte[] udp_data = eybg_mess.getBytes();
-                                    DatagramPacket paquet_send = new DatagramPacket(udp_data, 
-                                            udp_data.length, ia);
-
-                                    System.out.println("En train d'envoyer... " + eybg_mess); 
-                                    dso.send(paquet_send);
 
                                     String gbye_adr_suiv = mess_mots[4];
                                     int gbye_port_suiv = Integer.parseInt((mess_mots[5]).trim());
-                                    this.adr_suiv = gbye_adr_suiv;
-                                    this.port_suiv = gbye_port_suiv;
+
+                                    if (this.doubleur){
+                                        String gbye_adr = mess_mots[2];
+                                        int gbye_port = Integer.parseInt((mess_mots[3]).trim());
+
+                                        if (gbye_adr.equals(this.adr_suiv) && (gbye_port == this.port_suiv))
+                                        {
+                                            DatagramPacket paquet_send = new DatagramPacket(udp_data, 
+                                                udp_data.length, ia);
+
+                                            System.out.println("En train d'envoyer... " + eybg_mess); 
+                                            dso.send(paquet_send);
+
+                                            this.adr_suiv = gbye_adr_suiv;
+                                            this.port_suiv = gbye_port_suiv;
+                                        }
+                                        else {
+                                            InetSocketAddress ia2 = new InetSocketAddress(this.adr_suiv2, 
+                                                this.port_suiv2);
+                                            DatagramPacket paquet_send = new DatagramPacket(udp_data, 
+                                                udp_data.length, ia2);
+
+                                            System.out.println("En train d'envoyer... " + eybg_mess); 
+                                            dso.send(paquet_send);
+
+                                            this.adr_suiv2 = gbye_adr_suiv;
+                                            this.port_suiv2 = gbye_port_suiv;
+
+                                        }
+                                    }
+                                    else {
+                                        DatagramPacket paquet_send = new DatagramPacket(udp_data, 
+                                                udp_data.length, ia);
+
+                                        System.out.println("En train d'envoyer... " + eybg_mess); 
+                                        dso.send(paquet_send);
+
+                                        this.adr_suiv = gbye_adr_suiv;
+                                        this.port_suiv = gbye_port_suiv;
+                                    }
                                 }
-                              
-                                //NEW CODE
+            
+                                // APPL TRANS CODE
                                 //IF RECEIVES MESSAGE APPL TRANS### REQ THEN LOOK FOR FILE
-                                if((mess_mots[0]).equals("APPL") && (mess_mots[2]).equals("TRANS###") && (mess_mots[3]).equals("REQ")){
-                                	String fName = mess_mots[5].trim();
-                                	String messId = mess_mots[1].trim();
-                                	String currentDir = System.getProperty("user.dir");
-                                	String path = currentDir.trim() + "/" + fName.trim();
-                                	System.out.println("CURRENT FILE PATH : " + path);
-                                	//if finds file 
-                                	if (findFile(fName, currentDir)){
-                                		//send message right before transmission
-                                		File file = new File(path);
-                                		int len = (int) file.length();
-                                		
-                                		//finding the possible size
-                                		int no_mess = 0;
-                                		String mess_poss;
-                                		String trans_id = Objects.toString(createID());
-                                		
-                                		mess_poss = "APPL " + messId + " TRANS### SEN " + trans_id + " " + no_mess + "  ";
-                                		byte[] mess_size = mess_poss.getBytes();
-                                		int poss_size = 512 - mess_size.length;
-                                		//creeant la variable nummess
-                                		double d = len/poss_size;
-                                		if (d<1){
-                                			d = 1.0;
-                                		}else {
-                                			d = Math.ceil(d);
-                                		}
-                                		int nummess = (int)d;
-                                	                                		
-                                		//envoye le message decrivant combien de messages il va envoyer
-                                		message = "APPL " + messId + " TRANS### ROK " + trans_id + " " +
-                                                fName.length() + " " + fName + " " + nummess;	
-                                		byte[] udp_data = message.getBytes();
+                                else if((mess_mots[0]).equals("APPL") && (mess_mots[2]).equals("TRANS###") && (mess_mots[3]).equals("REQ")){
+                                    String fName = mess_mots[5].trim();
+                                    String messId = mess_mots[1].trim();
+                                    String currentDir = System.getProperty("user.dir");
+                                    String path = currentDir.trim() + "/" + fName.trim();
+                                    System.out.println("CURRENT FILE PATH : " + path);
+                                    //if finds file 
+                                    if (findFile(fName, currentDir)){
+                                        //send message right before transmission
+                                        File file = new File(path);
+                                        int len = (int) file.length();
+                                        
+                                        //finding the possible size
+                                        int no_mess = 0;
+                                        String mess_poss;
+                                        String trans_id = Objects.toString(createID());
+                                        
+                                        mess_poss = "APPL " + messId + " TRANS### SEN " + trans_id + " " + no_mess + "  ";
+                                        byte[] mess_size = mess_poss.getBytes();
+                                        int poss_size = 512 - mess_size.length;
+                                        //creeant la variable nummess
+                                        double d = len/poss_size;
+                                        if (d<1){
+                                            d = 1.0;
+                                        }else {
+                                            d = Math.ceil(d);
+                                        }
+                                        int nummess = (int)d;
+                                                                            
+                                        //envoye le message decrivant combien de messages il va envoyer
+                                        message = "APPL " + messId + " TRANS### ROK " + trans_id + " " +
+                                                fName.length() + " " + fName + " " + nummess;   
+                                        byte[] udp_data = message.getBytes();
                                         DatagramPacket paquet_send = new DatagramPacket(udp_data, 
                                                 udp_data.length, ia);
                                         System.out.println("En train d'envoyer... " + message); 
@@ -255,82 +343,69 @@ public class Entity implements Runnable {
                                         //System.out.println("ROK PACKET LENGTH : "+ udp_data.length);
                                         
                                         //continue à envoyer les autres messages
-                                		byte[] mess = new byte[len];
-                                		FileInputStream in = new FileInputStream(file);
-                                		int n = 0;
-                                		int bytes_read = 0;
-                                		int left = len;
-                                		while((bytes_read < len) && (n != -1)){        
-                                			
-                                			String messIdSen = Objects.toString(createID());
-                                			if (left >= poss_size){
-                                				n = in.read(mess, bytes_read, poss_size);
-                                				//System.out.println("mess = " + mess);
-                                				bytes_read += n;
-                                				left = left - poss_size;
-                                				String m = new String(mess);
-                                				
-                                				//sending message
-                                				message = "APPL " + messIdSen + " TRANS### SEN " + trans_id + " " + no_mess + " " +
-                                						m.length() + " " + m;	
-                                				udp_data = message.getBytes();
-                                				paquet_send = new DatagramPacket(udp_data, 
-                                						udp_data.length, ia);
-                                				System.out.println("En train d'envoyer... " + message); 
-                                				//System.out.println("greater");
-                                				dso.send(paquet_send);
-                                			} else if (left < poss_size) {
-                                				n = in.read(mess, bytes_read, left);
-                                				bytes_read += n;
-                                				left = 0;
-                                				//System.out.println("MESSAGE" );
-                                				String m = new String(mess);
-                                				//System.out.println(m);
-                                				//sending message
-                                				message = "APPL " + messIdSen + " TRANS### SEN " + trans_id + " " + no_mess + " " +
-                                						m.length() + " " + m;	
-                                				udp_data = message.getBytes();
-                                				paquet_send = new DatagramPacket(udp_data, 
-                                						udp_data.length, ia);
-                                				System.out.println("En train d'envoyer... " + message); 
-                                				//System.out.println("smaller");
-                                				dso.send(paquet_send);
-                                			}
-                                			no_mess += 1;
-                                		}                                	 
-                                		//start reading file, 
-                                		//then need to send it to whoever requested it and write it
-                                		//also needs to stop the current message 
-                                	} /*else {
-                                		//proceed to next machine to search it
-                                		// transmet le message à la prochaine machine
-                                        byte[] udp_data = message.getBytes();
-                                        DatagramPacket paquet_send = new DatagramPacket(udp_data, 
-                                                udp_data.length, ia);
-
-                                        System.out.println("En train d'envoyer... " + message); 
-                                        dso.send(paquet_send);
-                                	}*/
-                                	
+                                        byte[] mess = new byte[len];
+                                        FileInputStream in = new FileInputStream(file);
+                                        int n = 0;
+                                        int bytes_read = 0;
+                                        int left = len;
+                                        while((bytes_read < len) && (n != -1)){        
+                                            
+                                            String messIdSen = Objects.toString(createID());
+                                            if (left >= poss_size){
+                                                n = in.read(mess, bytes_read, poss_size);
+                                                //System.out.println("mess = " + mess);
+                                                bytes_read += n;
+                                                left = left - poss_size;
+                                                String m = new String(mess);
+                                                
+                                                //sending message
+                                                message = "APPL " + messIdSen + " TRANS### SEN " + trans_id + " " + no_mess + " " +
+                                                        m.length() + " " + m;   
+                                                udp_data = message.getBytes();
+                                                paquet_send = new DatagramPacket(udp_data, 
+                                                        udp_data.length, ia);
+                                                System.out.println("En train d'envoyer... " + message); 
+                                                //System.out.println("greater");
+                                                dso.send(paquet_send);
+                                            } else if (left < poss_size) {
+                                                n = in.read(mess, bytes_read, left);
+                                                bytes_read += n;
+                                                left = 0;
+                                                //System.out.println("MESSAGE" );
+                                                String m = new String(mess);
+                                                //System.out.println(m);
+                                                //sending message
+                                                message = "APPL " + messIdSen + " TRANS### SEN " + trans_id + " " + no_mess + " " +
+                                                        m.length() + " " + m;   
+                                                udp_data = message.getBytes();
+                                                paquet_send = new DatagramPacket(udp_data, 
+                                                        udp_data.length, ia);
+                                                System.out.println("En train d'envoyer... " + message); 
+                                                //System.out.println("smaller");
+                                                dso.send(paquet_send);
+                                            }
+                                            no_mess += 1;
+                                        }                                    
+                                    }
                                 }
-                                //NEW CODE
+
                                 //IF FILE == ROK
                                 if((mess_mots[0]).equals("APPL") && (mess_mots[2]).equals("TRANS###") && (mess_mots[3]).equals("ROK")){
-                                	System.out.println("RECIEVED A MESSAGE WITH ROK FIRST");
-                                	String fName = mess_mots[6].trim();
-                                	int nummess = Integer.parseInt(mess_mots[7].trim());
-                                	String trans_id = mess_mots[4].trim();
-                                	String currentDir = System.getProperty("user.dir");
-                                	String path = currentDir.trim() + "/" + fName.trim();
-                                	System.out.println("CURRENT FILE PATH ROK : " + path);
-                                	File file = new File(path);
-                                	// if file doesnt exists, then create it
-                        			if (!file.exists()) {
-                        				file.createNewFile();
-                        			}
-                        			FileOutputStream outputStream = new FileOutputStream(fName);
-                                	for (int i=0; i<nummess; i++){
-                                		// recoit le message
+                                    System.out.println("RECIEVED A MESSAGE WITH ROK FIRST");
+                                    String fName = mess_mots[6].trim();
+                                    int nummess = Integer.parseInt(mess_mots[7].trim());
+                                    String trans_id = mess_mots[4].trim();
+                                    String currentDir = System.getProperty("user.dir");
+                                    String path = currentDir.trim() + "/" + fName.trim();
+                                    System.out.println("CURRENT FILE PATH ROK : " + path);
+                                    File file = new File(path);
+                                    // if file doesnt exists, then create it
+                                    if (!file.exists()) {
+                                        file.createNewFile();
+                                    }
+                                    FileOutputStream outputStream = new FileOutputStream(fName);
+                                    for (int i=0; i<nummess; i++){
+                                        // recoit le message
                                         dc_ec.receive(buff);
                                         System.out.println("HERE IS THE BUFFER " );
                                         String messageSEN = new String(buff.array(), 0, buff.array().length);
@@ -343,21 +418,27 @@ public class Entity implements Runnable {
                                         String encCont = mess_mots1[7];
                                         byte[] encBuf = encCont.getBytes();               
                                         outputStream.write(encBuf); 
-                                	}
-                                	outputStream.close();
+                                    }
+                                    outputStream.close();
                                 }
-                                
-                                
-                    			
-                                
+
+
+                                // transmet le message à la prochaine machine
                                 else {
-                                    // transmet le message à la prochaine machine
                                     byte[] udp_data = message.getBytes();
                                     DatagramPacket paquet_send = new DatagramPacket(udp_data, 
                                             udp_data.length, ia);
 
                                     System.out.println("En train d'envoyer... " + message); 
                                     dso.send(paquet_send);
+
+                                    if (this.doubleur){
+                                        InetSocketAddress ia2 = new InetSocketAddress(this.adr_suiv2, 
+                                            this.port_suiv2);
+                                        DatagramPacket paquet_send2 = new DatagramPacket(udp_data, 
+                                            udp_data.length, ia2);
+                                        dso.send(paquet_send2);
+                                    }
                                     
                                     // WHOS message
                                     if ((mess_mots[0]).equals("WHOS")) {
@@ -365,26 +446,27 @@ public class Entity implements Runnable {
                                         this.deja_vus.add(memb_id);
                                     }
                                 }
-                            } 
-                          //NEW CODE
+                            }
+
+
+                            // APPL TRANS CODE
                             //IF FILE == ROK
-                            //testline added && statement
-                            if((mess_mots[0]).equals("APPL") && (mess_mots[2]).equals("TRANS###") && (mess_mots[3]).equals("ROK") && (this.id).equals(StartMessages.startId) ){
-                            	System.out.println("RECIEVED A MESSAGE WITH ROK SECOND");
-                            	String fName = mess_mots[6].trim();
-                            	int nummess = Integer.parseInt(mess_mots[7].trim());
-                            	String trans_id = mess_mots[4].trim();
-                            	String currentDir = System.getProperty("user.dir");
-                            	String path = currentDir.trim() + "/" + fName.trim();
-                            	System.out.println("CURRENT FILE PATH ROK : " + path);
-                            	File file = new File(path);
-                            	// if file doesnt exists, then create it
-                    			if (!file.exists()) {
-                    				file.createNewFile();
-                    			}
-                    			FileOutputStream outputStream = new FileOutputStream(fName);
-                            	for (int i=0; i<nummess; i++){
-                            		// recoit le message
+                            if((mess_mots[0]).equals("APPL") && (mess_mots[2]).equals("TRANS###") && (mess_mots[3]).equals("ROK")){
+                                System.out.println("RECIEVED A MESSAGE WITH ROK SECOND");
+                                String fName = mess_mots[6].trim();
+                                int nummess = Integer.parseInt(mess_mots[7].trim());
+                                String trans_id = mess_mots[4].trim();
+                                String currentDir = System.getProperty("user.dir");
+                                String path = currentDir.trim() + "/" + fName.trim();
+                                System.out.println("CURRENT FILE PATH ROK : " + path);
+                                File file = new File(path);
+                                // if file doesnt exists, then create it
+                                if (!file.exists()) {
+                                    file.createNewFile();
+                                }
+                                FileOutputStream outputStream = new FileOutputStream(fName);
+                                for (int i=0; i<nummess; i++){
+                                    // recoit le message
                                     dc_ec.receive(buff);
                                     String messageSEN = new String(buff.array(), 0, buff.array().length);
                                     buff.clear();
@@ -396,15 +478,25 @@ public class Entity implements Runnable {
                                     String encCont = mess_mots1[7];
                                     byte[] encBuf = encCont.getBytes();               
                                     outputStream.write(encBuf); 
-                            	}
-                            	outputStream.close();
+                                }
+                                outputStream.close();
                             }
                         }
                     }
+
+
+
                     // MULTICAST
-                    else if(key.isReadable() && 
-                            key.channel() == dc_diff) {
-                        dc_diff.receive(buff);
+                    else if((key.isReadable() && key.channel() == dc_diff) ||
+                            (key.isReadable() && key.channel() == dc_diff2)) {
+
+                        if(key.channel() == dc_diff) {
+                            dc_diff.receive(buff);
+                        }
+                        else {
+                            dc_diff2.receive(buff);
+                        }
+                        
                         String st = new String(buff.array(), 0, buff.array().length);
                         st = st.trim();
                         System.out.println("Recu : " + st);
@@ -412,9 +504,16 @@ public class Entity implements Runnable {
 
                         // DOWN - anneau doit se terminer
                         if (st.equals("DOWN")) {
-                            System.out.println("En train de fermer la connexion...");
-                            dso.close();
-                            System.exit(0);
+                            // pas un doubleur
+                            if(!this.doubleur) {
+                                System.out.println("En train de fermer la connexion...");
+                                dso.close();
+                                System.exit(0);
+                            }
+                            else {
+                                System.out.println("Ceci est un doubleur... restant ouvert.");
+                                this.doubleur = false;
+                            }
                         }
                     }
                     else {
@@ -477,41 +576,34 @@ public class Entity implements Runnable {
         return pred; 
     }
 
-    //NEW CODE
-    /* Pour chercher pour le ficher dans le dossier donnée
+    /* Pour chercher le fichier dans le dossier donné
     */
     private boolean findFile(String file, String path){
-    	//System.out.println("trying to find file: ");
-    	//System.out.print(file);
-    	//System.out.println("trying to find path: ");
-    	//System.out.print(path);
-    	File folder = new File(path);
-    	boolean found = false;
-    	if (folder.isDirectory()){
-    		File[] listOfFiles = folder.listFiles();
-    		if(listOfFiles.length < 1){
-    			//pas de fichers dans le dossier
-    		} else {
-    			String nameF = "";
-    			for (File f : listOfFiles){
-    				nameF = f.getName().trim();
-    				if (nameF.equals(file.trim())){
-    					found = true;
-    					System.out.println("FOUND IT!!!");
-    				}
-    			}
-    		}
-    		return found;
-    	} 
-    	return found;
+        //System.out.println("trying to find file: ");
+        //System.out.print(file);
+        //System.out.println("trying to find path: ");
+        //System.out.print(path);
+        File folder = new File(path);
+        boolean found = false;
+        if (folder.isDirectory()){
+            File[] listOfFiles = folder.listFiles();
+            if(listOfFiles.length < 1){
+                //pas de fichers dans le dossier
+            } else {
+                String nameF = "";
+                for (File f : listOfFiles){
+                    nameF = f.getName().trim();
+                    if (nameF.equals(file.trim())){
+                        found = true;
+                        System.out.println("FOUND IT!!!");
+                    }
+                }
+            }
+            return found;
+        } 
+        return found;
     }
-    
-    /* Pour lire et transmettre le message
-    */
 
-    /* Pour ecrire et transferer le message
-    */
-    
     // crée des IDs uniques de 8 octets
     private static long createID() {
         UUID u = UUID.randomUUID();
